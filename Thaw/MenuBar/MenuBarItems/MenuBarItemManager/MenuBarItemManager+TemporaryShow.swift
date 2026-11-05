@@ -539,12 +539,17 @@ extension MenuBarItemManager {
             // itemCache is a pre-move snapshot, so compare live bounds with the
             // captured origin instead.
             let currentOrigin = Bridging.getWindowBounds(for: item.windowID)?.origin
-            // Any nil counts as moved, the safe side. The explicit nil checks
-            // matter: `nil != nil` is false.
-            let itemHasMoved = currentOrigin == nil || preMoveOrigin == nil || currentOrigin != preMoveOrigin
+            var moveMayStillLand = false
+            if case EventError.dropReverted = error {
+                moveMayStillLand = true
+            }
 
-            if itemHasMoved {
-                MenuBarItemManager.diagLog.warning("move() threw but item \(item.logString) is no longer in \(originalSection); preserving pending rehide metadata")
+            if PendingLedger.keepsRehideRecordsAfterFailedShow(
+                moveMayStillLand: moveMayStillLand,
+                preMoveOrigin: preMoveOrigin,
+                currentOrigin: currentOrigin
+            ) {
+                MenuBarItemManager.diagLog.warning("move() threw but item \(item.logString) may have left \(originalSection); preserving pending rehide metadata")
                 // Re-assert in case a guard exit above skipped the write.
                 pendingReturnDestinations[tagIdentifier] = returnDestinationRecord
                 persistPendingRelocations()

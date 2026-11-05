@@ -180,4 +180,77 @@ struct MoveLayoutSettlingTests {
         #expect(outcome.value == "only")
         #expect(waits == 0)
     }
+
+    @Test("A late landing is seen on a later reading")
+    func lateLandingIsObserved() async {
+        var reads = 0
+        var waits = 0
+
+        let landed = await MenuBarItemManager.landingObserved(
+            extraPolls: 20,
+            isLanded: {
+                reads += 1
+                return reads == 4
+            },
+            wait: { waits += 1 }
+        )
+
+        #expect(landed)
+        #expect(reads == 4)
+        #expect(waits == 3)
+    }
+
+    @Test("An item that never lands uses every extra reading")
+    func neverLandedUsesEveryReading() async {
+        var reads = 0
+        var waits = 0
+
+        let landed = await MenuBarItemManager.landingObserved(
+            extraPolls: 3,
+            isLanded: {
+                reads += 1
+                return false
+            },
+            wait: { waits += 1 }
+        )
+
+        #expect(!landed)
+        #expect(reads == 4)
+        #expect(waits == 3)
+    }
+
+    @Test("No extra readings means a single check", arguments: [0, -1])
+    func noExtraReadingsIsASingleCheck(extraPolls: Int) async {
+        var reads = 0
+
+        let landed = await MenuBarItemManager.landingObserved(
+            extraPolls: extraPolls,
+            isLanded: {
+                reads += 1
+                return false
+            },
+            wait: { Issue.record("should not wait") }
+        )
+
+        #expect(!landed)
+        #expect(reads == 1)
+    }
+
+    @Test("A failed wait ends the search and reaches the caller")
+    func failedWaitPropagates() async {
+        struct DeadlinePassed: Error {}
+        var reads = 0
+
+        await #expect(throws: DeadlinePassed.self) {
+            _ = try await MenuBarItemManager.landingObserved(
+                extraPolls: 5,
+                isLanded: {
+                    reads += 1
+                    return false
+                },
+                wait: { throw DeadlinePassed() }
+            )
+        }
+        #expect(reads == 1)
+    }
 }

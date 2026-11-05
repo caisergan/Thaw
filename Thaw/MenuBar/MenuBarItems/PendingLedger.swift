@@ -77,6 +77,23 @@ nonisolated enum PendingLedger {
 
     // MARK: - Planner
 
+    /// Whether a temporary show whose move threw keeps the item's rehide records.
+    ///
+    /// A reverted drop can still land after the verdict, so its reading of the
+    /// origin proves nothing. Keeping the records costs little, because the planner
+    /// clears them for an item that stayed hidden. Dropping them strands a late
+    /// landing in the visible section, and the next save makes that slot permanent.
+    ///
+    /// Any nil origin counts as moved, the safe side. The explicit nil checks matter
+    /// because `nil != nil` is false.
+    static nonisolated func keepsRehideRecordsAfterFailedShow(
+        moveMayStillLand: Bool,
+        preMoveOrigin: CGPoint?,
+        currentOrigin: CGPoint?
+    ) -> Bool {
+        moveMayStillLand || currentOrigin == nil || preMoveOrigin == nil || currentOrigin != preMoveOrigin
+    }
+
     /// Computes the next pending-relocation decision for a single entry.
     /// Pure; state changes and moves stay with the orchestrator.
     static nonisolated func planPendingMove(

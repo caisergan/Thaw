@@ -66,7 +66,8 @@ extension MenuBarItemManager {
         /// Why a move stopped short of a verified landing.
         nonisolated enum StopReason: Equatable {
             /// Two consecutive releases put the item straight back where it
-            /// started: macOS is restoring the item's autosaved slot.
+            /// started and it never landed in the final check: macOS is
+            /// restoring the item's autosaved slot.
             case refusedByMacOS
             /// The target travelled more than a display width during the drag.
             case targetMoved
@@ -103,12 +104,21 @@ extension MenuBarItemManager {
             /// must be checked before reporting a failure.
             var deservesFinalLandingCheck: Bool {
                 switch self {
-                case .targetMoved, .targetRetreating, .ownerAlwaysSilent, .ownerSilent, .ownerCannotBeAddressed,
-                     .overran, .budgetExhausted, .other:
+                case .refusedByMacOS, .targetMoved, .targetRetreating, .ownerAlwaysSilent, .ownerSilent,
+                     .ownerCannotBeAddressed, .overran, .budgetExhausted, .other:
                     true
-                case .refusedByMacOS, .ownerUnresponsive, .itemGone, .destinationGone, .staleDestination, .superseded, .unsafePath:
+                case .ownerUnresponsive, .itemGone, .destinationGone, .staleDestination, .superseded, .unsafePath:
                     false
                 }
+            }
+
+            /// How many extra readings the final landing check takes, 25 ms apart.
+            ///
+            /// A reverted release is not proof of a refusal. Control Center can hold
+            /// a parked item at its starting origin for a moment before it lands, and
+            /// that reading looks settled, so the check keeps looking for half a second.
+            var finalLandingPolls: Int {
+                self == .refusedByMacOS ? 20 : 0
             }
 
             /// Whether the failure is filed against the item's owner in the

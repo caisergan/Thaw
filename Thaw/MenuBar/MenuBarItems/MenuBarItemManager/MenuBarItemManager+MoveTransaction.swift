@@ -171,6 +171,25 @@ extension MenuBarItemManager {
         return (previous, false)
     }
 
+    /// Reads once, then up to `extraPolls` more times, until a reading reports
+    /// the item landed. Failures from `wait` end the search and reach the caller.
+    static nonisolated func landingObserved(
+        extraPolls: Int,
+        isLanded: () async -> Bool,
+        wait: () async throws -> Void
+    ) async rethrows -> Bool {
+        if await isLanded() {
+            return true
+        }
+        for _ in 0 ..< max(0, extraPolls) {
+            try await wait()
+            if await isLanded() {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Control Center animates the reflow after release, so an immediate read
     /// can reject a correct drop.
     nonisolated func waitForLayoutToSettle(
@@ -352,16 +371,22 @@ extension MenuBarItemManager {
         lastError: (any Error)?
     ) async throws {
         if reason.deservesFinalLandingCheck, budget.elapsed < budget.limit {
+            let landed: Bool
             do {
                 try await waitForLayoutToSettle(
                     item: item,
                     target: destination.targetItem,
                     budget: budget
                 )
+                landed = try await Self.landingObserved(
+                    extraPolls: reason.finalLandingPolls,
+                    isLanded: { await isAtDestination(item, for: destination, on: displayID) },
+                    wait: { try await budget.sleep(for: .milliseconds(25)) }
+                )
             } catch is MoveDeadlineExceeded {
                 throw EventError.moveTimedOut(item)
             }
-            if await isAtDestination(item, for: destination, on: displayID) {
+            if landed {
                 MenuBarItemManager.diagLog.info(
                     "Move landed: \(item.logString) after \(attempts) attempt(s); confirmed after stopping for \(reason.logString)"
                 )

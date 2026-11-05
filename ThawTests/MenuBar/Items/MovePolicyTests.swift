@@ -265,7 +265,7 @@ struct MovePolicyTests {
     // MARK: Stop reasons
 
     @Test("Reasons that leave the item possibly landed get the final check", arguments: [
-        Policy.StopReason.targetMoved, .targetRetreating, .ownerAlwaysSilent, .ownerSilent,
+        Policy.StopReason.refusedByMacOS, .targetMoved, .targetRetreating, .ownerAlwaysSilent, .ownerSilent,
         .ownerCannotBeAddressed, .overran, .budgetExhausted, .other,
     ])
     func finalCheckReasons(reason: Policy.StopReason) {
@@ -273,10 +273,17 @@ struct MovePolicyTests {
     }
 
     @Test("Reasons that prove the item did not land skip the final check", arguments: [
-        Policy.StopReason.refusedByMacOS, .ownerUnresponsive, .itemGone, .destinationGone, .superseded, .unsafePath,
+        Policy.StopReason.ownerUnresponsive, .itemGone, .destinationGone, .superseded, .unsafePath,
     ])
     func noFinalCheckReasons(reason: Policy.StopReason) {
         #expect(!reason.deservesFinalLandingCheck)
+    }
+
+    @Test("Only a reverted drop keeps looking for a late landing")
+    func onlyRefusalGetsExtraLandingPolls() {
+        #expect(Policy.StopReason.refusedByMacOS.finalLandingPolls == 20)
+        #expect(Policy.StopReason.targetMoved.finalLandingPolls == 0)
+        #expect(Policy.StopReason.budgetExhausted.finalLandingPolls == 0)
     }
 
     @Test("Only silence is filed against the owner")

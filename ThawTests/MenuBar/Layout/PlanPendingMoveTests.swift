@@ -530,4 +530,72 @@ struct PlanPendingMoveTests {
         }
         #expect(target.tag == .hiddenControlItem)
     }
+
+    // MARK: - Failed temporary shows
+
+    private let parkedOrigin = CGPoint(x: -4047, y: 0)
+
+    /// The reading right after a reverted drop still shows the parked origin, but
+    /// the item can land a moment later and would then have no way back.
+    @Test("A reverted drop keeps the rehide records even at the starting origin")
+    func revertedDropKeepsRecordsAtStartingOrigin() {
+        #expect(PendingLedger.keepsRehideRecordsAfterFailedShow(
+            moveMayStillLand: true,
+            preMoveOrigin: parkedOrigin,
+            currentOrigin: parkedOrigin
+        ))
+    }
+
+    @Test("Another failure that left the item in place drops the rehide records")
+    func otherFailureAtStartingOriginDropsRecords() {
+        #expect(!PendingLedger.keepsRehideRecordsAfterFailedShow(
+            moveMayStillLand: false,
+            preMoveOrigin: parkedOrigin,
+            currentOrigin: parkedOrigin
+        ))
+    }
+
+    @Test("Another failure that displaced the item keeps the rehide records")
+    func otherFailureThatDisplacedKeepsRecords() {
+        #expect(PendingLedger.keepsRehideRecordsAfterFailedShow(
+            moveMayStillLand: false,
+            preMoveOrigin: parkedOrigin,
+            currentOrigin: CGPoint(x: 1000, y: 0)
+        ))
+    }
+
+    @Test("A missing origin counts as moved", arguments: [
+        (CGPoint?.none, CGPoint?.some(CGPoint(x: 1, y: 0))),
+        (CGPoint?.some(CGPoint(x: 1, y: 0)), CGPoint?.none),
+        (CGPoint?.none, CGPoint?.none),
+    ])
+    func missingOriginCountsAsMoved(preMoveOrigin: CGPoint?, currentOrigin: CGPoint?) {
+        #expect(PendingLedger.keepsRehideRecordsAfterFailedShow(
+            moveMayStillLand: false,
+            preMoveOrigin: preMoveOrigin,
+            currentOrigin: currentOrigin
+        ))
+    }
+
+    /// The planner is what makes keeping the records safe when nothing landed.
+    @Test("Records kept for an item that stayed hidden clear without a move")
+    func keptRecordsClearWhenTheItemStayedHidden() {
+        let item = MenuBarItem.fixture(
+            tag: appTag("com.example.app", "Status"),
+            windowID: 916,
+            bounds: CGRect(origin: parkedOrigin, size: CGSize(width: 38, height: 22))
+        )
+        let entry = PendingLedger.PendingEntry(
+            tagIdentifier: item.tag.tagIdentifier,
+            kind: .section(.hidden)
+        )
+
+        let decision = planWithDefaults(
+            entry: entry,
+            items: [item],
+            controlItems: .fixture(hiddenAt: hiddenBounds)
+        )
+
+        #expect(decision == .clearEntry)
+    }
 }
